@@ -1,6 +1,6 @@
 git init
 git add .
-git commit -m "initial aderyn run"
+git commit -m "initial review"
 git push origin main
 
 <p align="center">

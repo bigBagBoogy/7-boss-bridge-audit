@@ -12,6 +12,10 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 contract L1Vault is Ownable {
     IERC20 public token;
 
+    // @audit if msg.sender becomes the owner of this contract, then it must be deployed by be the bridge contract. So
+    // q who deploys this and when?
+    // a In the constructor of L1BossBridge, the line: ```vault = new L1Vault(token);```
+    // should successfully deploy this contract
     constructor(IERC20 _token) Ownable(msg.sender) {
         token = _token;
     }
