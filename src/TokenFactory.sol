@@ -22,6 +22,8 @@ contract TokenFactory is Ownable {
      */
     function deployToken(string memory symbol, bytes memory contractBytecode) public onlyOwner returns (address addr) {
         assembly {
+            // @ audit-high this won't work on ZKsync!!!   see below see below see below
+            // https://era.zksync.io/docs/reference/architecture/differences-with-ethereum.html#create-create2
             addr := create(0, add(contractBytecode, 0x20), mload(contractBytecode))
         }
         s_tokenToAddress[symbol] = addr;
@@ -32,3 +34,11 @@ contract TokenFactory is Ownable {
         return s_tokenToAddress[symbol];
     }
 }
+
+// ****The following code will not function correctly because the compiler is not aware of the bytecode beforehand:
+
+// function myFactory(bytes memory bytecode) public {
+//    assembly {
+//       addr := create(0, add(bytecode, 0x20), mload(bytecode))
+//    }
+// }
