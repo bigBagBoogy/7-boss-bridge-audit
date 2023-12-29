@@ -27,6 +27,7 @@ import { L1Vault } from "./L1Vault.sol";
 contract L1BossBridge is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    // @audit-info should be constant
     uint256 public DEPOSIT_LIMIT = 100_000 ether;
 
     IERC20 public immutable token;
@@ -67,6 +68,11 @@ contract L1BossBridge is Ownable, Pausable, ReentrancyGuard {
      * @param l2Recipient The address of the user who will receive the tokens on L2
      * @param amount The amount of tokens to deposit
      */
+
+    // Alice: approve token -> bridge
+    // Bob:  depositTokensToL2(from: Alice, l2Recipient: Bob, amount: all her monies!!!)
+    // @audit HIGH / CRIT
+    // if a user approves the bridge, any other user can steal their monies
     function depositTokensToL2(address from, address l2Recipient, uint256 amount) external whenNotPaused {
         if (token.balanceOf(address(vault)) + amount > DEPOSIT_LIMIT) {
             revert L1BossBridge__DepositLimitReached();
@@ -74,6 +80,7 @@ contract L1BossBridge is Ownable, Pausable, ReentrancyGuard {
         token.safeTransferFrom(from, address(vault), amount);
 
         // Our off-chain service picks up this event and mints the corresponding tokens on L2
+        // @audit-info should follow CEI. Should be before transferFrom
         emit Deposit(from, l2Recipient, amount);
     }
 
@@ -116,11 +123,29 @@ contract L1BossBridge is Ownable, Pausable, ReentrancyGuard {
             revert L1BossBridge__Unauthorized();
         }
 
+        // @audit follow-up:"The expected structure of the message is (address target, uint256 value, bytes data). This
+        // allows flexibility in specifying the target address, value, and data for the call to L1."   ->  Is this a
+        // possible attack vector?
         (address target, uint256 value, bytes memory data) = abi.decode(message, (address, uint256, bytes));
 
+        // @audit follow-up: Security Considerations: The use of call for external calls might introduce security risks,
+        // and it's important to carefully review and test this part of the code. Additionally, the management of
+        // authorized signers should be done securely.
+        // @audit slither said this is bad:
         (bool success,) = target.call{ value: value }(data);
         if (!success) {
             revert L1BossBridge__CallFailed();
         }
     }
+    // more on the above sendToL1 function:
+    //Reentrancy Attacks: Allowing arbitrary target and data in the external call can open up the possibility of
+    // reentrancy attacks. If the target contract or the contracts it calls make additional external calls, reentrancy
+    // vulnerabilities might arise.
+
+    // Unexpected Interactions: Allowing arbitrary calls to any address (target) can lead to // unexpected interactions
+    // with other contracts, including malicious ones. This could result in // unintended consequences or
+    // vulnerabilities.
+
+    // Misuse of value: Allowing arbitrary value in the external call might result in unintended // transfers of Ether.
+    // If the value is not carefully controlled, it could be exploited for // financial gain.
 }
